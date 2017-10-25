@@ -1,4 +1,4 @@
-FROM alpine:3.4
+FROM alpine:3.6
 
 # Inspired by wernight/docker-alpine-nginx-pagespeed
 
@@ -27,7 +27,7 @@ RUN set -x && \
         libwebp-dev \
         linux-headers \
         gperf \
-        openssl-dev \
+        libressl-dev \
         pcre-dev \
         python \
         zlib-dev && \
@@ -74,7 +74,7 @@ RUN set -x && \
     cd /tmp && \
     curl -L http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz | tar -zx && \
     cd /tmp/nginx-${NGINX_VERSION} && \
-    LD_LIBRARY_PATH=/tmp/modpagespeed-${PAGESPEED_VERSION}/usr/lib ./configure \
+    ./configure \
         --prefix=/var/lib/nginx \
         --sbin-path=/usr/sbin \
         --modules-path=/usr/lib/nginx \
@@ -102,7 +102,7 @@ RUN set -x && \
         --pid-path=/var/run/nginx.pid \
         --add-module=/tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable \
         --with-cc-opt="-fPIC -I /usr/include/apr-1" \
-        --with-ld-opt="-luuid -lapr-1 -laprutil-1 -licudata -licuuc -L/tmp/modpagespeed-${PAGESPEED_VERSION}/usr/lib -lpng12 -lturbojpeg -ljpeg -lwebp" && \
+        --with-ld-opt="-Wl,--start-group -luuid -lapr-1 -laprutil-1 -licudata -licuuc -lpng12 -lturbojpeg -ljpeg -lwebp" && \
     make install --silent && \
     # Clean-up:
     cd && \
