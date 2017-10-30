@@ -11,7 +11,6 @@ RUN apk --no-cache add \
         libwebp \
         icu \
         icu-libs \
-        openssl \
         pcre \
         zlib
 
