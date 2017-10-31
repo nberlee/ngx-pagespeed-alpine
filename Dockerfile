@@ -8,7 +8,6 @@ RUN apk --no-cache add \
         apr \
         apr-util \
         libjpeg-turbo \
-        libwebp \
         icu \
         icu-libs \
         pcre \
@@ -23,7 +22,6 @@ RUN set -x && \
         curl \
         icu-dev \
         libjpeg-turbo-dev \
-        libwebp-dev \
         linux-headers \
         gperf \
         openssl-dev \
@@ -101,7 +99,7 @@ RUN set -x && \
         --pid-path=/var/run/nginx.pid \
         --add-module=/tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable \
         --with-cc-opt="-fPIC -I /usr/include/apr-1" \
-        --with-ld-opt="-luuid -lapr-1 -laprutil-1 -licudata -licuuc -L/tmp/modpagespeed-${PAGESPEED_VERSION}/usr/lib -lpng12 -lturbojpeg -ljpeg -lwebp" && \
+        --with-ld-opt="-luuid -lapr-1 -laprutil-1 -licudata -licuuc -L/tmp/modpagespeed-${PAGESPEED_VERSION}/usr/lib -lpng12 -lturbojpeg -ljpeg" && \
     make install --silent && \
     # Clean-up:
     cd && \
