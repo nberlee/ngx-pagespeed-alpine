@@ -1,6 +1,18 @@
 FROM alpine:3.6
 
 # Inspired by wernight/docker-alpine-nginx-pagespeed
+# This sadly requires an old version of http://www.libpng.org/pub/png/libpng.html
+ARG LIBPNG_VERSION=1.2.59
+
+# Check https://github.com/pagespeed/ngx_pagespeed/releases for the latest version
+ARG PAGESPEED_VERSION=1.12.34.3
+ARG NGX_PAGESPEED_VERSION=1.12.34.3
+
+# Check http://nginx.org/en/download.html for the latest version.
+ARG NGINX_VERSION=1.12.2
+
+# Number of CPUs during compile time
+ARG CPU=4
 
 RUN apk --no-cache add \
         ca-certificates \
@@ -31,17 +43,12 @@ RUN set -x && \
         python \
         zlib-dev && \
     # Build libpng:
-    # This sadly requires an old version of http://www.libpng.org/pub/png/libpng.html
-    LIBPNG_VERSION=1.2.59 && \
     cd /tmp && \
     curl -L http://prdownloads.sourceforge.net/libpng/libpng-${LIBPNG_VERSION}.tar.gz | tar -zx && \
     cd /tmp/libpng-${LIBPNG_VERSION} && \
     ./configure --build=$CBUILD --host=$CHOST --prefix=/usr --enable-shared --with-libpng-compat && \
-    make install V=0 && \
+    make install V=0 -j$CPU && \
     # Build PageSpeed:
-    # Check https://github.com/pagespeed/ngx_pagespeed/releases for the latest version
-    PAGESPEED_VERSION=1.12.34.3 && \
-    NGX_PAGESPEED_VERSION=1.12.34.3 && \
     cd /tmp && \
     curl -L https://github.com/We-Amp/ngx-pagespeed-alpine/blob/master/mod-pagespeed-beta-1.12.34.3.tar.bz2?raw=true | tar -jx && \
     curl -L https://github.com/pagespeed/ngx_pagespeed/archive/v${NGX_PAGESPEED_VERSION}-stable.tar.gz | tar -zx && \
@@ -53,9 +60,9 @@ RUN set -x && \
     curl -L https://raw.githubusercontent.com/We-Amp/ngx-pagespeed-alpine/master/patches/stack_trace_posix.patch | patch -p1 && \
     ./generate.sh -D use_system_libs=1 -D _GLIBCXX_USE_CXX11_ABI=0 -D use_system_icu=1 && \
     cd /tmp/modpagespeed-${PAGESPEED_VERSION}/src && \
-    make BUILDTYPE=Release CXXFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" CFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" -j4 && \
+    make BUILDTYPE=Release CXXFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" CFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" -j$CPU && \
     cd /tmp/modpagespeed-${PAGESPEED_VERSION}/src/pagespeed/automatic/ && \
-    make psol BUILDTYPE=Release CXXFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" CFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" && \
+    make psol BUILDTYPE=Release CXXFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" CFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" -j$CPU && \
     mkdir -p /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol && \
     mkdir -p /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/lib/Release/linux/x64 && \
     mkdir -p /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/out/Release && \
@@ -68,8 +75,6 @@ RUN set -x && \
     cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/pagespeed/automatic/pagespeed_automatic.a /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/lib/Release/linux/x64 && \
     cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/url /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/ && \
     # Build Nginx with support for PageSpeed:
-    # Check http://nginx.org/en/download.html for the latest version.
-    NGINX_VERSION=1.12.2 && \
     cd /tmp && \
     curl -L http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz | tar -zx && \
     cd /tmp/nginx-${NGINX_VERSION} && \
@@ -102,7 +107,7 @@ RUN set -x && \
         --add-module=/tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable \
         --with-cc-opt="-fPIC -I /usr/include/apr-1" \
         --with-ld-opt="-Wl,--start-group -luuid -lapr-1 -laprutil-1 -licudata -licuuc -lpng12 -lturbojpeg -ljpeg -lwebp" && \
-    make install --silent && \
+    make install --silent -j$CPU && \
     # Clean-up:
     cd && \
     apk del .build-deps && \
