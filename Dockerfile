@@ -15,7 +15,6 @@ ARG NGINX_VERSION=1.12.2
 ARG CPU=4
 
 RUN apk --no-cache add \
-        ca-certificates \
         libuuid \
         apr \
         apr-util \
@@ -31,6 +30,7 @@ RUN set -x && \
         apr-dev \
         apr-util-dev \
         build-base \
+        ca-certificates \
         curl \
         icu-dev \
         libjpeg-turbo-dev \
