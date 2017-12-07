@@ -87,7 +87,6 @@ RUN set -x && \
         --without-http_autoindex_module \
         --without-http_browser_module \
         --without-http_geo_module \
-        --without-http_map_module \
         --without-http_memcached_module \
         --without-http_userid_module \
         --without-mail_pop3_module \
