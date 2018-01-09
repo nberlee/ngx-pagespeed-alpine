@@ -44,13 +44,13 @@ RUN set -x && \
     cd /tmp && \
     curl -L http://prdownloads.sourceforge.net/libpng/libpng-${LIBPNG_VERSION}.tar.gz | tar -zx && \
     cd /tmp/libpng-${LIBPNG_VERSION} && \
-    sed -i 's/wait/echo/' configure && \
     ./configure --build=$CBUILD --host=$CHOST --prefix=/usr --enable-shared --with-libpng-compat && \
     make install V=0 -j$CPU && \
     # Build PageSpeed:
     cd /tmp && \
     curl -L https://github.com/We-Amp/ngx-pagespeed-alpine/blob/master/mod-pagespeed-beta-1.12.34.3.tar.bz2?raw=true | tar -jx && \
     curl -L https://github.com/pagespeed/ngx_pagespeed/archive/v${NGX_PAGESPEED_VERSION}-stable.tar.gz | tar -zx && \
+    mv *ngx* ngx_pagespeed-1.12.34.3-stable && \
     cd /tmp/modpagespeed-${PAGESPEED_VERSION} && \
     curl -L https://raw.githubusercontent.com/We-Amp/ngx-pagespeed-alpine/master/patches/automatic_makefile.patch | patch -p1 && \
     curl -L https://raw.githubusercontent.com/We-Amp/ngx-pagespeed-alpine/master/patches/libpng_cflags.patch | patch -p1 && \
