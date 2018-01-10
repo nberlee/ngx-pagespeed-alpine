@@ -1,37 +1,24 @@
-FROM alpine:3.7
+FROM alpine:3.7 AS pagespeed
 
-# Inspired by wernight/docker-alpine-nginx-pagespeed
 # This sadly requires an old version of http://www.libpng.org/pub/png/libpng.html
 ARG LIBPNG_VERSION=1.2.59
 
 # Check https://github.com/pagespeed/ngx_pagespeed/releases for the latest version
-ARG PAGESPEED_VERSION=1.12.34.3
 ARG NGX_PAGESPEED_VERSION=1.12.34.3
-
-# Check http://nginx.org/en/download.html for the latest version.
-ARG NGINX_VERSION=1.12.2
+ARG PAGESPEED_VERSION=1.12.34.3
 
 # Number of CPUs during compile time
 ARG CPU=4
 
-RUN apk --no-cache add \
-        libuuid \
-        apr \
-        apr-util \
-        libjpeg-turbo \
-        icu \
-        icu-libs \
-        pcre \
-        zlib
-
 RUN set -x && \
-    apk --no-cache add -t .build-deps \
+    apk --no-cache add \
         apache2-dev \
         apr-dev \
         apr-util-dev \
         build-base \
         ca-certificates \
         curl \
+        tar \
         icu-dev \
         libjpeg-turbo-dev \
         linux-headers \
@@ -39,42 +26,78 @@ RUN set -x && \
         libressl-dev \
         pcre-dev \
         python \
-        zlib-dev && \
-    # Build libpng:
-    cd /tmp && \
+        zlib-dev
+
+# Build libpng
+RUN cd /tmp && \
     curl -L http://prdownloads.sourceforge.net/libpng/libpng-${LIBPNG_VERSION}.tar.gz | tar -zx && \
     cd /tmp/libpng-${LIBPNG_VERSION} && \
     ./configure --build=$CBUILD --host=$CHOST --prefix=/usr --enable-shared --with-libpng-compat && \
-    make install V=0 -j$CPU && \
-    # Build PageSpeed:
-    cd /tmp && \
-    curl -L https://github.com/We-Amp/ngx-pagespeed-alpine/blob/master/mod-pagespeed-beta-1.12.34.3.tar.bz2?raw=true | tar -jx && \
-    curl -L https://github.com/pagespeed/ngx_pagespeed/archive/v${NGX_PAGESPEED_VERSION}-stable.tar.gz | tar -zx && \
-    mv *ngx* ngx_pagespeed-1.12.34.3-stable && \
-    cd /tmp/modpagespeed-${PAGESPEED_VERSION} && \
-    curl -L https://raw.githubusercontent.com/We-Amp/ngx-pagespeed-alpine/master/patches/automatic_makefile.patch | patch -p1 && \
-    curl -L https://raw.githubusercontent.com/We-Amp/ngx-pagespeed-alpine/master/patches/libpng_cflags.patch | patch -p1 && \
-    curl -L https://raw.githubusercontent.com/We-Amp/ngx-pagespeed-alpine/master/patches/pthread_nonrecursive_np.patch | patch -p1 && \
-    curl -L https://raw.githubusercontent.com/We-Amp/ngx-pagespeed-alpine/master/patches/rename_c_symbols.patch | patch -p1 && \
-    curl -L https://raw.githubusercontent.com/We-Amp/ngx-pagespeed-alpine/master/patches/stack_trace_posix.patch | patch -p1 && \
+    make install V=0 -j$CPU
+
+
+# Build PageSpeed
+COPY mod-pagespeed-beta-1.12.34.3.tar.bz2 patches/*.patch /tmp/
+
+RUN cd /tmp && \
+    mkdir modpagespeed && \
+    tar -jxf mod-pagespeed-beta-1.12.34.3.tar.bz2 --strip-components=1 -C modpagespeed && \
+    cd modpagespeed && \
+    patch -p1 < /tmp/automatic_makefile.patch && \
+    patch -p1 < /tmp/libpng_cflags.patch && \
+    patch -p1 < /tmp/pthread_nonrecursive_np.patch && \
+    patch -p1 < /tmp/rename_c_symbols.patch  && \
+    patch -p1 < /tmp/stack_trace_posix.patch && \
     ./generate.sh -D use_system_libs=1 -D _GLIBCXX_USE_CXX11_ABI=0 -D use_system_icu=1 && \
-    cd /tmp/modpagespeed-${PAGESPEED_VERSION}/src && \
+    cd /tmp/modpagespeed/src && \
     make BUILDTYPE=Release CXXFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -DUCHAR_TYPE=uint16_t -D_GLIBCXX_USE_CXX11_ABI=0" CFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" -j$CPU && \
-    cd /tmp/modpagespeed-${PAGESPEED_VERSION}/src/pagespeed/automatic/ && \
-    make psol BUILDTYPE=Release CXXFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -DUCHAR_TYPE=uint16_t -D_GLIBCXX_USE_CXX11_ABI=0" CFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" -j$CPU && \
-    mkdir -p /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol && \
-    mkdir -p /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/lib/Release/linux/x64 && \
-    mkdir -p /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/out/Release && \
-    cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/out/Release/obj /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/out/Release/ && \
-    cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/net /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/ && \
-    cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/testing /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/ && \
-    cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/pagespeed /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/ && \
-    cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/third_party /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/ && \
-    cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/tools /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/ && \
-    cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/pagespeed/automatic/pagespeed_automatic.a /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/lib/Release/linux/x64 && \
-    cp -r /tmp/modpagespeed-${PAGESPEED_VERSION}/src/url /tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable/psol/include/ && \
-    # Build Nginx with support for PageSpeed:
-    cd /tmp && \
+    cd /tmp/modpagespeed/src/pagespeed/automatic/ && \
+    make psol BUILDTYPE=Release CXXFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -DUCHAR_TYPE=uint16_t -D_GLIBCXX_USE_CXX11_ABI=0" CFLAGS=" -I/usr/include/apr-1 -I/tmp/libpng-${LIBPNG_VERSION} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0" -j$CPU
+
+RUN mkdir -p /tmp/ngx_pagespeed/psol && \
+    mkdir -p /tmp/ngx_pagespeed/psol/lib/Release/linux/x64 && \
+    mkdir -p /tmp/ngx_pagespeed/psol/include/out/Release && \
+    curl -L https://github.com/apache/incubator-pagespeed-ngx/archive/v${NGX_PAGESPEED_VERSION}-stable.tar.gz | tar -zx --strip-components=1 -C /tmp/ngx_pagespeed && \
+    cp -r /tmp/modpagespeed/src/out/Release/obj /tmp/ngx_pagespeed/psol/include/out/Release/ && \
+    cp -r /tmp/modpagespeed/src/net /tmp/ngx_pagespeed/psol/include/ && \
+    cp -r /tmp/modpagespeed/src/testing /tmp/ngx_pagespeed/psol/include/ && \
+    cp -r /tmp/modpagespeed/src/pagespeed /tmp/ngx_pagespeed/psol/include/ && \
+    cp -r /tmp/modpagespeed/src/third_party /tmp/ngx_pagespeed/psol/include/ && \
+    cp -r /tmp/modpagespeed/src/tools /tmp/ngx_pagespeed/psol/include/ && \
+    cp -r /tmp/modpagespeed/src/pagespeed/automatic/pagespeed_automatic.a /tmp/ngx_pagespeed/psol/lib/Release/linux/x64 && \
+    cp -r /tmp/modpagespeed/src/url /tmp/ngx_pagespeed/psol/include/
+
+
+FROM alpine:3.7 AS nginx
+# Check https://github.com/pagespeed/ngx_pagespeed/releases for the latest version
+
+# Check http://nginx.org/en/download.html for the latest version.
+ARG NGINX_VERSION=1.12.2
+
+# Number of CPUs during compile time
+ARG CPU=4
+
+RUN set -x && \
+    apk --no-cache add \
+        apache2-dev \
+        apr-dev \
+        apr-util-dev \
+        build-base \
+        ca-certificates \
+        curl \
+        tar \
+        icu-dev \
+        libjpeg-turbo-dev \
+        linux-headers \
+        libressl-dev \
+        pcre-dev \
+        zlib-dev
+
+COPY --from=pagespeed  /usr/lib/libpng* /usr/lib/
+COPY --from=pagespeed /tmp/ngx_pagespeed /tmp/ngx_pagespeed/ 
+
+# Build Nginx with support for PageSpeed
+RUN cd /tmp && \
     curl -L http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz | tar -zx && \
     cd /tmp/nginx-${NGINX_VERSION} && \
     ./configure \
@@ -102,18 +125,35 @@ RUN set -x && \
         --http-log-path=/var/log/nginx/access.log \
         --error-log-path=/var/log/nginx/error.log \
         --pid-path=/var/run/nginx.pid \
-        --add-module=/tmp/ngx_pagespeed-${NGX_PAGESPEED_VERSION}-stable \
+        --add-module=/tmp/ngx_pagespeed\
         --with-cc-opt="-fPIC -I /usr/include/apr-1" \
         --with-ld-opt="-Wl,--start-group -luuid -lapr-1 -laprutil-1 -licudata -licuuc -lpng12 -lturbojpeg -ljpeg" && \
-    make install --silent -j$CPU && \
-    # Clean-up:
-    cd && \
-    apk del .build-deps && \
-    rm -rf /tmp/* && \
-    # forward request and error logs to docker log collector
-    ln -sf /dev/stdout /var/log/nginx/access.log && \
+    make install --silent -j$CPU
+
+
+FROM alpine:3.7
+MAINTAINER Nico Berlee <nico@berlee.nl>
+
+RUN apk --no-cache add \
+        libuuid \
+        apr \
+        apr-util \
+        libjpeg-turbo \
+        icu \
+        icu-libs \
+        pcre \
+        zlib
+
+COPY --from=pagespeed  /usr/lib/libpng*.so /usr/lib/libpng*.la /usr/lib/
+COPY --from=nginx /usr/sbin/nginx /usr/sbin/nginx
+COPY --from=nginx /var/log/nginx /var/log/nginx/
+COPY --from=nginx /etc/nginx /etc/nginx
+
+# forward request and error logs to docker log collector
+# Make PageSpeed cache writable
+
+RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
     ln -sf /dev/stderr /var/log/nginx/error.log && \
-    # Make PageSpeed cache writabl:
     mkdir -p /var/cache/ngx_pagespeed && \
     chmod -R o+wr /var/cache/ngx_pagespeed
 
