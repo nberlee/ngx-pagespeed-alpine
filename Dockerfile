@@ -144,7 +144,7 @@ RUN apk --no-cache add \
         pcre \
         zlib
 
-COPY --from=pagespeed  /usr/lib/libpng*.so /usr/lib/libpng*.la /usr/lib/
+COPY --from=pagespeed  /usr/lib/libpng* /usr/lib/
 COPY --from=nginx /usr/sbin/nginx /usr/sbin/nginx
 COPY --from=nginx /var/log/nginx /var/log/nginx/
 COPY --from=nginx /etc/nginx /etc/nginx
